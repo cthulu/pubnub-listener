@@ -20,6 +20,7 @@ func main() {
 
 	pn := pubnub.NewPubNub(config)
 	listener := pubnub.NewListener()
+    endpoint := os.Getenv("ENDPOINT")
 
 	go func() {
 		for {
@@ -44,7 +45,7 @@ func main() {
 						return
 					}
 
-					req, err := http.NewRequest("POST", "http://192.168.2.4:8123/api/services/google_assistant_sdk/send_text_command", bytes.NewBuffer(jsonBody))
+					req, err := http.NewRequest("POST", endpoint + "/api/services/google_assistant_sdk/send_text_command", bytes.NewBuffer(jsonBody))
 					if err != nil {
 						fmt.Printf("Request creation failed: %v\n", err)
 						return
