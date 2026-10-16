@@ -1,14 +1,13 @@
-.PHONY: build clean run test build-linux
+.PHONY: build clean run test linux docker
 
 # Go parameters
 BINARY_NAME=pubnub
-MAIN_FILE=pubnub.go
 
 build:
-	go build -o $(BINARY_NAME) $(MAIN_FILE)
+	go build -o $(BINARY_NAME) .
 
 linux:
-	GOOS=linux GOARCH=amd64 go build -o $(BINARY_NAME)-linux-amd64 $(MAIN_FILE)
+	GOOS=linux GOARCH=amd64 go build -o $(BINARY_NAME)-linux-amd64 .
 
 clean:
 	go clean
@@ -19,7 +18,7 @@ run: build
 	./$(BINARY_NAME)
 
 test:
-	go test -v ./...
+	go test -v -cover ./...
 
 docker:
 	docker build -t nl.freshlytyped.nl/pubnub .

@@ -1,10 +1,7 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,14 +10,19 @@ import (
 )
 
 func main() {
-	config := pubnub.NewConfig()
-	config.SubscribeKey = os.Getenv("PN_SUBSCRIBE_KEY")
-	config.PublishKey = os.Getenv("PN_PUBLISH_KEY")
-	config.UUID = "uuid"
+	cfg, err := LoadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 
-	pn := pubnub.NewPubNub(config)
+	pnConfig := pubnub.NewConfig()
+	pnConfig.SubscribeKey = cfg.PubNubSubscribeKey
+	pnConfig.PublishKey = cfg.PubNubPublishKey
+	pnConfig.UUID = cfg.PubNubUUID
+
+	pn := pubnub.NewPubNub(pnConfig)
 	listener := pubnub.NewListener()
-    endpoint := os.Getenv("ENDPOINT")
 
 	go func() {
 		for {
@@ -34,40 +36,20 @@ func main() {
 				case pubnub.PNReconnectedCategory:
 					fmt.Println("Reconnected")
 				}
+
 			case message := <-listener.Message:
-				if msg, ok := message.Message.(map[string]interface{}); ok {
-					fmt.Println(msg["message"])
-					jsonBody, err := json.Marshal(map[string]interface{}{
-						"command": msg["message"],
-					})
-					if err != nil {
-						fmt.Printf("JSON marshal failed: %v\n", err)
-						return
-					}
-
-					req, err := http.NewRequest("POST", endpoint + "/api/services/google_assistant_sdk/send_text_command", bytes.NewBuffer(jsonBody))
-					if err != nil {
-						fmt.Printf("Request creation failed: %v\n", err)
-						return
-					}
-					bearerToken := os.Getenv("BEARER_TOKEN")
-					if bearerToken == "" {
-						fmt.Println("BEARER_TOKEN environment variable not set")
-						return
-					}
-					req.Header.Set("Authorization", "Bearer "+bearerToken)
-					req.Header.Set("Content-Type", "application/json")
-
-					client := &http.Client{}
-					resp, err := client.Do(req)
-					if err != nil {
-						fmt.Printf("HTTP request failed: %v\n", err)
-						return
-					}
-					defer resp.Body.Close()
+				msg, ok := message.Message.(map[string]interface{})
+				if !ok {
+					fmt.Println("Warning: message is not a JSON object, skipping")
+					continue
 				}
+
+				if err := routeMessage(msg, cfg); err != nil {
+					fmt.Printf("Error handling message: %v\n", err)
+				}
+
 			case <-listener.Presence:
-				// handle presence
+				// Handle presence events if needed.
 			}
 		}
 	}()
@@ -75,11 +57,12 @@ func main() {
 	pn.AddListener(listener)
 
 	pn.Subscribe().
-		Channels([]string{"channel-ha"}).
+		Channels([]string{cfg.PubNubChannel}).
 		Execute()
 
+	// Wait for termination signal.
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGTERM)
-	<-c
+	signal.Notify(c, syscall.SIGTERM, syscall.SIGINT)
+	sig := <-c
+	fmt.Printf("Received signal %v, shutting down\n", sig)
 }
-
