@@ -51,7 +51,7 @@ func handleLocation(msg map[string]interface{}, cfg Config) error {
 	}
 
 	// Normalize device name: lowercase, replace spaces with underscores.
-	entityID := "input_text.phone_" + strings.ToLower(strings.ReplaceAll(deviceName, " ", "_"))
+	entityID := "input_text." + strings.ToLower(strings.ReplaceAll(deviceName, " ", "_"))
 
 	value := fmt.Sprintf("%v|%v|%v", latitude, longitude, accuracy)
 
