@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // handleGoogleAssistant processes a message and forwards it to Home Assistant's
@@ -76,7 +77,7 @@ func callHomeAssistant(url string, body []byte, cfg Config) error {
 	req.Header.Set("Authorization", "Bearer "+cfg.HABearerToken)
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("HTTP request failed: %w", err)

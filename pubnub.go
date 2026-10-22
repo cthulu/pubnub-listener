@@ -20,6 +20,8 @@ func main() {
 	pnConfig.SubscribeKey = cfg.PubNubSubscribeKey
 	pnConfig.PublishKey = cfg.PubNubPublishKey
 	pnConfig.UUID = cfg.PubNubUUID
+	pnConfig.PNReconnectionPolicy = pubnub.PNExponentialPolicy
+	pnConfig.MaximumReconnectionRetries = -1
 
 	pn := pubnub.NewPubNub(pnConfig)
 	listener := pubnub.NewListener()
@@ -28,6 +30,7 @@ func main() {
 		for {
 			select {
 			case status := <-listener.Status:
+				fmt.Printf("PubNub status: %v\n", status.Category)
 				switch status.Category {
 				case pubnub.PNDisconnectedCategory:
 					fmt.Println("Disconnected")
