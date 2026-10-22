@@ -33,8 +33,8 @@ func TestRouteMessage_Location(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if received["entity_id"] != "input_text.phone_pixel_8" {
-		t.Errorf("entity_id = %q, want %q", received["entity_id"], "input_text.phone_pixel_8")
+	if received["entity_id"] != "input_text.pixel_8" {
+		t.Errorf("entity_id = %q, want %q", received["entity_id"], "input_text.pixel_8")
 	}
 }
 

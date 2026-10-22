@@ -123,8 +123,8 @@ func TestHandleLocation_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if received["entity_id"] != "input_text.phone_pixel_8" {
-		t.Errorf("entity_id = %q, want %q", received["entity_id"], "input_text.phone_pixel_8")
+	if received["entity_id"] != "input_text.pixel_8" {
+		t.Errorf("entity_id = %q, want %q", received["entity_id"], "input_text.pixel_8")
 	}
 	if received["value"] != "52.123456|5.123456|18" {
 		t.Errorf("value = %q, want %q", received["value"], "52.123456|5.123456|18")
@@ -145,10 +145,10 @@ func TestHandleLocation_DeviceNameNormalization(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"Pixel 8", "input_text.phone_pixel_8"},
-		{"iPhone 15 Pro", "input_text.phone_iphone_15_pro"},
-		{"Samsung Galaxy S24", "input_text.phone_samsung_galaxy_s24"},
-		{"already_normalized", "input_text.phone_already_normalized"},
+		{"Pixel 8", "input_text.pixel_8"},
+		{"iPhone 15 Pro", "input_text.iphone_15_pro"},
+		{"Samsung Galaxy S24", "input_text.samsung_galaxy_s24"},
+		{"already_normalized", "input_text.already_normalized"},
 	}
 
 	for _, tt := range tests {
