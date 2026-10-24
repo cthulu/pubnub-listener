@@ -112,7 +112,6 @@ func TestRouteMessage_RequestZones(t *testing.T) {
 	defer server.Close()
 
 	cfg := testConfig(server.URL)
-	cfg.CommandsChannelPrefix = "home-location-commands-"
 	cfg.PublishCallback = func(msg interface{}, channel string) error {
 		publishedMessage = msg
 		publishedChannel = channel
@@ -128,12 +127,42 @@ func TestRouteMessage_RequestZones(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if publishedChannel != "home-location-commands-Pixel 8" {
-		t.Errorf("published channel = %q, want %q", publishedChannel, "home-location-commands-Pixel 8")
+	if publishedChannel != "channel-ha" {
+		t.Errorf("published channel = %q, want %q", publishedChannel, "channel-ha")
 	}
 
 	pubMsg := publishedMessage.(map[string]interface{})
 	if pubMsg["type"] != "zones" {
 		t.Errorf("message type = %q, want %q", pubMsg["type"], "zones")
+	}
+}
+
+func TestRouteMessage_ZonesIgnored(t *testing.T) {
+	var haCalled bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		haCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	cfg := testConfig(server.URL)
+	cfg.PublishCallback = func(msg interface{}, channel string) error {
+		t.Error("publish callback should not be called for zones")
+		return nil
+	}
+
+	// A zones response arriving on the channel should be silently ignored.
+	msg := map[string]interface{}{
+		"type": "zones",
+		"zones": []zoneResponse{
+			{Name: "Home", Latitude: 52.1, Longitude: 5.1, Radius: 100, DeviceName: "Pixel 8"},
+		},
+	}
+	err := routeMessage(msg, cfg)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if haCalled {
+		t.Error("Home Assistant should not have been called for a zones message")
 	}
 }
