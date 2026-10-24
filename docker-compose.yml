@@ -1,0 +1,17 @@
+services:
+  nl.freshlytyped.nl-pubnub:
+    image: "ghcr.io/cthulu/pubnub-listener:latest"
+    container_name: nl.freshlytyped.nl-pubnub
+    pull_policy: never
+    restart: unless-stopped
+    depends_on: 
+      - homeassistant
+    environment:
+      PN_SUBSCRIBE_KEY: sub-c-3596c328-652f-11e9-82b5-0e0cd4972a93
+      HA_BEARER_TOKEN: >-
+        eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJhNWFiMTRkMDJjNGQ0NTdiOTEwN2FmOTA4YTI0MGI4MyIsImlhdCI6MTc4ODMzNjU5NCwiZXhwIjoyMTAzNjk2NTk0fQ.-lCgMdizZ1Gnjca_dfmnEYPQBlRMGK_A14QfYMD543I
+      PN_PUBLISH_KEY: pub-c-a51174d8-fbeb-4033-902b-92b999ce84c7
+      HA_ENDPOINT: "http://192.168.2.3:8123"
+      
+
+

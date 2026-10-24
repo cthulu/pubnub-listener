@@ -193,7 +193,7 @@ func postHomeAssistant(url string, body []byte, cfg Config) (string, error) {
 }
 
 // handleRequestZones processes a request_zones message: queries HA for zone
-// definitions and publishes them to the device's command channel.
+// definitions and publishes them back to the main PubNub channel.
 func handleRequestZones(msg map[string]interface{}, cfg Config) error {
 	deviceName, ok := msg["device_name"].(string)
 	if !ok {
@@ -222,9 +222,6 @@ func handleRequestZones(msg map[string]interface{}, cfg Config) error {
 		"zones": zonesResp,
 	}
 
-	// Publish to the device's command channel.
-	commandChannel := cfg.CommandsChannelPrefix + deviceName
-
 	if cfg.PublishCallback == nil {
 		if cfg.PubNubPublishKey == "" {
 			fmt.Println("Warning: PN_PUBLISH_KEY not configured, skipping zones publish")
@@ -234,10 +231,10 @@ func handleRequestZones(msg map[string]interface{}, cfg Config) error {
 		return nil
 	}
 
-	if err := cfg.PublishCallback(zonesMsg, commandChannel); err != nil {
-		return fmt.Errorf("failed to publish zones to channel %s: %w", commandChannel, err)
+	if err := cfg.PublishCallback(zonesMsg, cfg.PubNubChannel); err != nil {
+		return fmt.Errorf("failed to publish zones to channel %s: %w", cfg.PubNubChannel, err)
 	}
 
-	fmt.Printf("Published zones to channel %s\n", commandChannel)
+	fmt.Printf("Published zones to channel %s\n", cfg.PubNubChannel)
 	return nil
 }

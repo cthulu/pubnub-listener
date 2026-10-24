@@ -13,6 +13,7 @@ import (
 func testConfig(serverURL string) Config {
 	return Config{
 		PubNubSubscribeKey: "sub123",
+		PubNubChannel:      "channel-ha",
 		HAEndpoint:         serverURL,
 		HABearerToken:      "test-token",
 	}
@@ -218,7 +219,6 @@ func TestHandleRequestZones_Success(t *testing.T) {
 	defer server.Close()
 
 	cfg := testConfig(server.URL)
-	cfg.CommandsChannelPrefix = "home-location-commands-"
 	cfg.PublishCallback = func(msg interface{}, channel string) error {
 		publishedMessage = msg
 		publishedChannel = channel
@@ -234,8 +234,8 @@ func TestHandleRequestZones_Success(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if publishedChannel != "home-location-commands-Pixel 8" {
-		t.Errorf("published channel = %q, want %q", publishedChannel, "home-location-commands-Pixel 8")
+	if publishedChannel != "channel-ha" {
+		t.Errorf("published channel = %q, want %q", publishedChannel, "channel-ha")
 	}
 
 	pubMsg, ok := publishedMessage.(map[string]interface{})
@@ -285,7 +285,6 @@ func TestHandleRequestZones_NoZones(t *testing.T) {
 	defer server.Close()
 
 	cfg := testConfig(server.URL)
-	cfg.CommandsChannelPrefix = "home-location-commands-"
 	cfg.PublishCallback = func(msg interface{}, channel string) error {
 		publishedMessage = msg
 		publishedChannel = channel
@@ -305,8 +304,8 @@ func TestHandleRequestZones_NoZones(t *testing.T) {
 	if pubMsg["type"] != "zones" {
 		t.Errorf("message type = %q, want %q", pubMsg["type"], "zones")
 	}
-	if publishedChannel != "home-location-commands-Phone" {
-		t.Errorf("published channel = %q, want %q", publishedChannel, "home-location-commands-Phone")
+	if publishedChannel != "channel-ha" {
+		t.Errorf("published channel = %q, want %q", publishedChannel, "channel-ha")
 	}
 	zones := pubMsg["zones"].([]zoneResponse)
 	if len(zones) != 0 {
@@ -321,7 +320,6 @@ func TestHandleRequestZones_HAError(t *testing.T) {
 	defer server.Close()
 
 	cfg := testConfig(server.URL)
-	cfg.CommandsChannelPrefix = "home-location-commands-"
 	cfg.PublishCallback = func(msg interface{}, channel string) error {
 		t.Error("publish callback should not be called when HA fails")
 		return nil
@@ -362,7 +360,6 @@ func TestHandleRequestZones_NoPublishKey(t *testing.T) {
 	defer server.Close()
 
 	cfg := testConfig(server.URL)
-	cfg.CommandsChannelPrefix = "home-location-commands-"
 	cfg.PublishCallback = nil // No publish callback configured
 	cfg.PubNubPublishKey = "" // No publish key
 
@@ -385,7 +382,6 @@ func TestHandleRequestZones_PublishError(t *testing.T) {
 	defer server.Close()
 
 	cfg := testConfig(server.URL)
-	cfg.CommandsChannelPrefix = "home-location-commands-"
 	cfg.PublishCallback = func(msg interface{}, channel string) error {
 		return fmt.Errorf("network error")
 	}
