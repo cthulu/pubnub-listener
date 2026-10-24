@@ -113,9 +113,11 @@ type zoneResponse struct {
 // fetchZonesFromHA queries Home Assistant's /api/template endpoint with a Jinja2
 // template that renders zone entities into a JSON array.
 func fetchZonesFromHA(cfg Config) ([]zoneInfo, error) {
-	template := `{% for z in states.zone %}{"name": "{{ z.name }}", "latitude": {{ z.attributes.latitude | round(6) }}, "longitude": {{ z.attributes.longitude | round(6) }}, "radius": {{ z.attributes.radius | round(0) }}}{% if not loop.last %},{% endif %}{% endfor %}`
+	template := `[{% for z in states.zone %}{"name": "{{ z.name }}", "latitude": {{ z.attributes.latitude | round(6) }}, "longitude": {{ z.attributes.longitude | round(6) }}, "radius": {{ z.attributes.radius | round(0) }}}{% if not loop.last %},{% endif %}{% endfor %}]`
 
-	jsonBody, err := json.Marshal(template)
+	jsonBody, err := json.Marshal(map[string]interface{}{
+		"template": template,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("JSON marshal failed: %w", err)
 	}
@@ -126,15 +128,20 @@ func fetchZonesFromHA(cfg Config) ([]zoneInfo, error) {
 		return nil, err
 	}
 
-	// The /api/template endpoint returns a JSON array of rendered strings, one per
-	// state variable referenced. The zone template produces exactly one entry — a
-	// JSON array string.
+	// Newer Home Assistant versions return the rendered template directly as a JSON
+	// array. Try that first.
+	var zones []zoneInfo
+	if err := json.Unmarshal([]byte(respBody), &zones); err == nil {
+		return zones, nil
+	}
+
+	// Older versions return a JSON array of rendered strings. Find the entry that
+	// looks like a JSON array (the zone template output).
 	var rendered []string
 	if err := json.Unmarshal([]byte(respBody), &rendered); err != nil {
 		return nil, fmt.Errorf("failed to decode template response: %w", err)
 	}
 
-	// Find the entry that looks like a JSON array (the zone template output).
 	zoneArrayStr := ""
 	for _, entry := range rendered {
 		trimmed := strings.TrimSpace(entry)
@@ -149,8 +156,6 @@ func fetchZonesFromHA(cfg Config) ([]zoneInfo, error) {
 		return []zoneInfo{}, nil
 	}
 
-	// Parse the rendered JSON array.
-	var zones []zoneInfo
 	if err := json.Unmarshal([]byte(zoneArrayStr), &zones); err != nil {
 		return nil, fmt.Errorf("failed to parse zone data from template: %w", err)
 	}
@@ -174,13 +179,13 @@ func postHomeAssistant(url string, body []byte, cfg Config) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
 	fmt.Printf("HomeAssistant %s returned %d\n", url, resp.StatusCode)
