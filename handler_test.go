@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -190,5 +191,266 @@ func TestHandleLocation_MissingFields(t *testing.T) {
 				t.Fatalf("expected error for %s", tt.name)
 			}
 		})
+	}
+}
+
+func TestHandleRequestZones_Success(t *testing.T) {
+	var publishedMessage interface{}
+	var publishedChannel string
+
+	// Simulate the /api/template response: an array of rendered strings.
+	templateResponse := []string{
+		`[{"name": "Home", "latitude": 52.123456, "longitude": 5.456789, "radius": 150}, {"name": "Work", "latitude": 52.987654, "longitude": 5.987654, "radius": 100}]`,
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/api/template" {
+			t.Errorf("expected /api/template, got %s", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer test-token" {
+			t.Errorf("expected Bearer token, got %q", r.Header.Get("Authorization"))
+		}
+		json.NewEncoder(w).Encode(templateResponse)
+	}))
+	defer server.Close()
+
+	cfg := testConfig(server.URL)
+	cfg.CommandsChannelPrefix = "home-location-commands-"
+	cfg.PublishCallback = func(msg interface{}, channel string) error {
+		publishedMessage = msg
+		publishedChannel = channel
+		return nil
+	}
+
+	msg := map[string]interface{}{
+		"type":        "request_zones",
+		"device_name": "Pixel 8",
+	}
+	err := handleRequestZones(msg, cfg)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if publishedChannel != "home-location-commands-Pixel 8" {
+		t.Errorf("published channel = %q, want %q", publishedChannel, "home-location-commands-Pixel 8")
+	}
+
+	pubMsg, ok := publishedMessage.(map[string]interface{})
+	if !ok {
+		t.Fatal("published message is not a map")
+	}
+	if pubMsg["type"] != "zones" {
+		t.Errorf("message type = %q, want %q", pubMsg["type"], "zones")
+	}
+
+	zones, ok := pubMsg["zones"].([]zoneResponse)
+	if !ok {
+		t.Fatalf("zones field is not a zoneResponse slice, got %T", pubMsg["zones"])
+	}
+	if len(zones) != 2 {
+		t.Fatalf("expected 2 zones, got %d", len(zones))
+	}
+
+	// Check first zone (Home).
+	if zones[0].Name != "Home" {
+		t.Errorf("zone name = %q, want %q", zones[0].Name, "Home")
+	}
+	if zones[0].Latitude != 52.123456 {
+		t.Errorf("zone latitude = %v, want %v", zones[0].Latitude, 52.123456)
+	}
+	if zones[0].Longitude != 5.456789 {
+		t.Errorf("zone longitude = %v, want %v", zones[0].Longitude, 5.456789)
+	}
+	if zones[0].Radius != 150.0 {
+		t.Errorf("zone radius = %v, want %v", zones[0].Radius, 150.0)
+	}
+	if zones[0].DeviceName != "Pixel 8" {
+		t.Errorf("zone device_name = %q, want %q", zones[0].DeviceName, "Pixel 8")
+	}
+}
+
+func TestHandleRequestZones_NoZones(t *testing.T) {
+	var publishedMessage interface{}
+	var publishedChannel string
+
+	// Template renders to an empty string when no zones exist.
+	templateResponse := []string{""}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(templateResponse)
+	}))
+	defer server.Close()
+
+	cfg := testConfig(server.URL)
+	cfg.CommandsChannelPrefix = "home-location-commands-"
+	cfg.PublishCallback = func(msg interface{}, channel string) error {
+		publishedMessage = msg
+		publishedChannel = channel
+		return nil
+	}
+
+	msg := map[string]interface{}{
+		"type":        "request_zones",
+		"device_name": "Phone",
+	}
+	err := handleRequestZones(msg, cfg)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	pubMsg := publishedMessage.(map[string]interface{})
+	if pubMsg["type"] != "zones" {
+		t.Errorf("message type = %q, want %q", pubMsg["type"], "zones")
+	}
+	if publishedChannel != "home-location-commands-Phone" {
+		t.Errorf("published channel = %q, want %q", publishedChannel, "home-location-commands-Phone")
+	}
+	zones := pubMsg["zones"].([]zoneResponse)
+	if len(zones) != 0 {
+		t.Errorf("expected empty zones array, got %d items", len(zones))
+	}
+}
+
+func TestHandleRequestZones_HAError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	cfg := testConfig(server.URL)
+	cfg.CommandsChannelPrefix = "home-location-commands-"
+	cfg.PublishCallback = func(msg interface{}, channel string) error {
+		t.Error("publish callback should not be called when HA fails")
+		return nil
+	}
+
+	msg := map[string]interface{}{
+		"type":        "request_zones",
+		"device_name": "Pixel 8",
+	}
+	err := handleRequestZones(msg, cfg)
+	if err == nil {
+		t.Fatal("expected error for HA failure")
+	}
+}
+
+func TestHandleRequestZones_MissingDeviceName(t *testing.T) {
+	cfg := testConfig("http://localhost:9999")
+	cfg.PublishCallback = func(msg interface{}, channel string) error {
+		t.Error("publish callback should not be called")
+		return nil
+	}
+
+	msg := map[string]interface{}{
+		"type": "request_zones",
+	}
+	err := handleRequestZones(msg, cfg)
+	if err == nil {
+		t.Fatal("expected error for missing device_name")
+	}
+}
+
+func TestHandleRequestZones_NoPublishKey(t *testing.T) {
+	templateResponse := []string{""}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(templateResponse)
+	}))
+	defer server.Close()
+
+	cfg := testConfig(server.URL)
+	cfg.CommandsChannelPrefix = "home-location-commands-"
+	cfg.PublishCallback = nil // No publish callback configured
+	cfg.PubNubPublishKey = "" // No publish key
+
+	msg := map[string]interface{}{
+		"type":        "request_zones",
+		"device_name": "Pixel 8",
+	}
+	err := handleRequestZones(msg, cfg)
+	if err != nil {
+		t.Fatalf("expected no error when publish key is missing (should skip publish), got %v", err)
+	}
+}
+
+func TestHandleRequestZones_PublishError(t *testing.T) {
+	templateResponse := []string{""}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(templateResponse)
+	}))
+	defer server.Close()
+
+	cfg := testConfig(server.URL)
+	cfg.CommandsChannelPrefix = "home-location-commands-"
+	cfg.PublishCallback = func(msg interface{}, channel string) error {
+		return fmt.Errorf("network error")
+	}
+
+	msg := map[string]interface{}{
+		"type":        "request_zones",
+		"device_name": "Pixel 8",
+	}
+	err := handleRequestZones(msg, cfg)
+	if err == nil {
+		t.Fatal("expected error for publish failure")
+	}
+}
+
+func TestFetchZonesFromHA_EmptyTemplateResponse(t *testing.T) {
+	// When no zones exist, the template renders to an empty string.
+	templateResponse := []string{""}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/api/template" {
+			t.Errorf("expected /api/template, got %s", r.URL.Path)
+		}
+		json.NewEncoder(w).Encode(templateResponse)
+	}))
+	defer server.Close()
+
+	cfg := testConfig(server.URL)
+	zones, err := fetchZonesFromHA(cfg)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(zones) != 0 {
+		t.Errorf("expected empty zones, got %d", len(zones))
+	}
+}
+
+func TestFetchZonesFromHA_ParsesTemplateJSON(t *testing.T) {
+	// Simulate a rendered template with two zones.
+	templateResponse := []string{
+		`[{"name": "Home", "latitude": 52.123456, "longitude": 5.456789, "radius": 150}]`,
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(templateResponse)
+	}))
+	defer server.Close()
+
+	cfg := testConfig(server.URL)
+	zones, err := fetchZonesFromHA(cfg)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(zones) != 1 {
+		t.Fatalf("expected 1 zone, got %d", len(zones))
+	}
+	if zones[0].Name != "Home" {
+		t.Errorf("zone name = %q, want %q", zones[0].Name, "Home")
+	}
+	if zones[0].Latitude != 52.123456 {
+		t.Errorf("zone latitude = %v, want %v", zones[0].Latitude, 52.123456)
+	}
+	if zones[0].Radius != 150.0 {
+		t.Errorf("zone radius = %v, want %v", zones[0].Radius, 150.0)
 	}
 }

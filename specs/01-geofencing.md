@@ -17,7 +17,8 @@ Android app ──request_zones──► pubnub-listener ──zones──► An
 
 1. Android app publishes `request_zones` to the main PubNub channel.
 2. Listener receives the message, extracts `device_name`.
-3. Listener queries `GET /api/states?prefix=zone.` from Home Assistant.
+3. Listener POSTs a Jinja2 template to `POST /api/template` on Home Assistant,
+   which renders all zone definitions as a JSON array.
 4. Listener builds a `zones` message and publishes it to the command channel
    `home-location-commands-{device_name}`.
 5. Android app receives the zones on its subscribed command channel.
@@ -40,7 +41,7 @@ Android app ──request_zones──► pubnub-listener ──zones──► An
   "type": "zones",
   "zones": [
     {
-      "id": "home",
+      "name": "Home",
       "latitude": 52.123456,
       "longitude": 5.456789,
       "radius": 150,
@@ -57,39 +58,22 @@ array as "clear all zones."
 
 ### New Handler: `handleRequestZones`
 
-Added to `handler.go`. Extracts `device_name`, queries HA, publishes the
-response.
+Added to `handler.go`. Extracts `device_name`, queries HA via `/api/template`,
+publishes the response.
 
 ```go
 func handleRequestZones(msg map[string]interface{}, cfg Config) error {
     // 1. Extract device_name
-    // 2. GET /api/states?prefix=zone.
-    // 3. Parse zone entities, extract id/latitude/longitude/radius
+    // 2. POST Jinja2 template to /api/template
+    // 3. Parse template response, extract name/latitude/longitude/radius
     // 4. Build zones message
     // 5. Publish to command channel
 }
 ```
 
-The HA API returns zone entities like:
-
-```json
-[
-  {
-    "entity_id": "zone.home",
-    "state": "home",
-    "attributes": {
-      "latitude": 52.123456,
-      "longitude": 5.456789,
-      "radius": 150,
-      "passive": true,
-      "id": "home"
-    }
-  }
-]
-```
-
-The listener extracts `attributes.id`, `attributes.latitude`,
-`attributes.longitude`, and `attributes.radius`.
+The template iterates `states.zone` and renders each zone's `name`, `latitude`,
+`longitude`, and `radius` as a JSON array string. The listener parses this
+response and maps the rendered `name` to each zone.
 
 ### Route Change
 
@@ -116,7 +100,7 @@ The listener already has a PubNub client for subscription. The same client is
 used to publish the `zones` message. The publish uses:
 
 ```go
-pn.Publish().Message(zonesMsg).Channel(commandChannel).Async()
+pn.Publish().Channel(commandChannel).Message(zonesMsg).Execute()
 ```
 
 The publish key from `cfg.PubNubPublishKey` is used. If it's not configured,

@@ -10,6 +10,7 @@ func TestLoadConfig_AllFields(t *testing.T) {
 	os.Setenv("PN_PUBLISH_KEY", "pub456")
 	os.Setenv("PN_UUID", "my-uuid")
 	os.Setenv("PN_CHANNEL", "my-channel")
+	os.Setenv("PN_COMMANDS_CHANNEL_PREFIX", "my-commands-")
 	os.Setenv("HA_ENDPOINT", "http://localhost:8123")
 	os.Setenv("HA_BEARER_TOKEN", "token-abc")
 	defer func() {
@@ -17,6 +18,7 @@ func TestLoadConfig_AllFields(t *testing.T) {
 		os.Unsetenv("PN_PUBLISH_KEY")
 		os.Unsetenv("PN_UUID")
 		os.Unsetenv("PN_CHANNEL")
+		os.Unsetenv("PN_COMMANDS_CHANNEL_PREFIX")
 		os.Unsetenv("HA_ENDPOINT")
 		os.Unsetenv("HA_BEARER_TOKEN")
 	}()
@@ -37,6 +39,9 @@ func TestLoadConfig_AllFields(t *testing.T) {
 	}
 	if cfg.PubNubChannel != "my-channel" {
 		t.Errorf("Channel = %q, want %q", cfg.PubNubChannel, "my-channel")
+	}
+	if cfg.CommandsChannelPrefix != "my-commands-" {
+		t.Errorf("CommandsChannelPrefix = %q, want %q", cfg.CommandsChannelPrefix, "my-commands-")
 	}
 	if cfg.HAEndpoint != "http://localhost:8123" {
 		t.Errorf("HAEndpoint = %q, want %q", cfg.HAEndpoint, "http://localhost:8123")
@@ -75,6 +80,22 @@ func TestLoadConfig_DefaultChannel(t *testing.T) {
 	}
 	if cfg.PubNubChannel != "channel-ha" {
 		t.Errorf("Channel = %q, want default %q", cfg.PubNubChannel, "channel-ha")
+	}
+}
+
+func TestLoadConfig_DefaultCommandsChannelPrefix(t *testing.T) {
+	os.Setenv("PN_SUBSCRIBE_KEY", "sub123")
+	os.Setenv("HA_ENDPOINT", "http://localhost:8123")
+	os.Setenv("HA_BEARER_TOKEN", "token-abc")
+	os.Unsetenv("PN_COMMANDS_CHANNEL_PREFIX")
+	defer os.Unsetenv("PN_COMMANDS_CHANNEL_PREFIX")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if cfg.CommandsChannelPrefix != "home-location-commands-" {
+		t.Errorf("CommandsChannelPrefix = %q, want default %q", cfg.CommandsChannelPrefix, "home-location-commands-")
 	}
 }
 

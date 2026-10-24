@@ -5,14 +5,20 @@ import (
 	"os"
 )
 
+// PublishFunc is a callback that publishes a message to a PubNub channel.
+// It is used by handlers that need to send responses back to devices.
+type PublishFunc func(message interface{}, channel string) error
+
 // Config holds all runtime configuration loaded from environment variables.
 type Config struct {
-	PubNubSubscribeKey string
-	PubNubPublishKey   string
-	PubNubUUID         string
-	PubNubChannel      string
-	HAEndpoint         string
-	HABearerToken      string
+	PubNubSubscribeKey     string
+	PubNubPublishKey       string
+	PubNubUUID             string
+	PubNubChannel          string
+	CommandsChannelPrefix  string
+	HAEndpoint             string
+	HABearerToken          string
+	PublishCallback        PublishFunc
 }
 
 // LoadConfig reads configuration from environment variables and validates required fields.
@@ -29,13 +35,19 @@ func LoadConfig() (Config, error) {
 		channel = "channel-ha"
 	}
 
+	commandsPrefix := os.Getenv("PN_COMMANDS_CHANNEL_PREFIX")
+	if commandsPrefix == "" {
+		commandsPrefix = "home-location-commands-"
+	}
+
 	cfg := Config{
-		PubNubSubscribeKey: os.Getenv("PN_SUBSCRIBE_KEY"),
-		PubNubPublishKey:   os.Getenv("PN_PUBLISH_KEY"),
-		PubNubUUID:         uuid,
-		PubNubChannel:      channel,
-		HAEndpoint:         os.Getenv("HA_ENDPOINT"),
-		HABearerToken:      os.Getenv("HA_BEARER_TOKEN"),
+		PubNubSubscribeKey:    os.Getenv("PN_SUBSCRIBE_KEY"),
+		PubNubPublishKey:      os.Getenv("PN_PUBLISH_KEY"),
+		PubNubUUID:            uuid,
+		PubNubChannel:         channel,
+		CommandsChannelPrefix: commandsPrefix,
+		HAEndpoint:            os.Getenv("HA_ENDPOINT"),
+		HABearerToken:         os.Getenv("HA_BEARER_TOKEN"),
 	}
 
 	// Validate required fields.

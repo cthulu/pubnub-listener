@@ -92,3 +92,48 @@ func TestRouteMessage_UnknownType(t *testing.T) {
 		t.Errorf("command = %q, want %q", received["command"], "test command")
 	}
 }
+
+func TestRouteMessage_RequestZones(t *testing.T) {
+	var publishedMessage interface{}
+	var publishedChannel string
+
+	// Simulate the /api/template response.
+	templateResponse := []string{
+		`[{"name": "Home", "latitude": 52.1, "longitude": 5.1, "radius": 100}]`,
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/template" {
+			json.NewEncoder(w).Encode(templateResponse)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	cfg := testConfig(server.URL)
+	cfg.CommandsChannelPrefix = "home-location-commands-"
+	cfg.PublishCallback = func(msg interface{}, channel string) error {
+		publishedMessage = msg
+		publishedChannel = channel
+		return nil
+	}
+
+	msg := map[string]interface{}{
+		"type":        "request_zones",
+		"device_name": "Pixel 8",
+	}
+	err := routeMessage(msg, cfg)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if publishedChannel != "home-location-commands-Pixel 8" {
+		t.Errorf("published channel = %q, want %q", publishedChannel, "home-location-commands-Pixel 8")
+	}
+
+	pubMsg := publishedMessage.(map[string]interface{})
+	if pubMsg["type"] != "zones" {
+		t.Errorf("message type = %q, want %q", pubMsg["type"], "zones")
+	}
+}

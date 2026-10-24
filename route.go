@@ -9,6 +9,8 @@ func routeMessage(msg map[string]interface{}, cfg Config) error {
 	switch msgType {
 	case "location":
 		return handleLocation(msg, cfg)
+	case "request_zones":
+		return handleRequestZones(msg, cfg)
 	default:
 		return handleGoogleAssistant(msg, cfg)
 	}
