@@ -5,6 +5,10 @@ import (
 	"os"
 )
 
+// PublishFunc is a callback that publishes a message to a PubNub channel.
+// It is used by handlers that need to send responses back to devices.
+type PublishFunc func(message interface{}, channel string) error
+
 // Config holds all runtime configuration loaded from environment variables.
 type Config struct {
 	PubNubSubscribeKey string
@@ -13,6 +17,7 @@ type Config struct {
 	PubNubChannel      string
 	HAEndpoint         string
 	HABearerToken      string
+	PublishCallback    PublishFunc
 }
 
 // LoadConfig reads configuration from environment variables and validates required fields.
