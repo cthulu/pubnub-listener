@@ -59,6 +59,12 @@ func main() {
 
 	pn.AddListener(listener)
 
+	// Wire up the publish callback so handlers can publish responses.
+	cfg.PublishCallback = func(message interface{}, channel string) error {
+		_, _, err := pn.Publish().Channel(channel).Message(message).Execute()
+		return err
+	}
+
 	pn.Subscribe().
 		Channels([]string{cfg.PubNubChannel}).
 		Execute()
