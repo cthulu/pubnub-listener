@@ -5,9 +5,20 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	pubnub "github.com/pubnub/go"
 )
+
+// reconnect re-subscribes to the channel to recover from a stale or broken
+// subscription. Calling Subscribe() while already subscribed is handled by the
+// SDK: it preserves the stored timetoken, stops the current loop, and starts
+// a fresh one. The Go SDK lacks a DedupOnSubscribe option, but duplicate
+// messages are harmless for our message types (location, zones, commands).
+func reconnect(pn *pubnub.PubNub, channel string) {
+	fmt.Println("Re-subscribing to channel...")
+	pn.Subscribe().Channels([]string{channel}).Execute()
+}
 
 func main() {
 	cfg, err := LoadConfig()
@@ -33,11 +44,18 @@ func main() {
 				fmt.Printf("PubNub status: %v\n", status.Category)
 				switch status.Category {
 				case pubnub.PNDisconnectedCategory:
-					fmt.Println("Disconnected")
+					fmt.Println("Disconnected — re-subscribing")
+					reconnect(pn, cfg.PubNubChannel)
 				case pubnub.PNConnectedCategory:
 					fmt.Println("Connected")
 				case pubnub.PNReconnectedCategory:
 					fmt.Println("Reconnected")
+				case pubnub.PNUnknownCategory:
+					fmt.Println("Unknown status — re-subscribing")
+					reconnect(pn, cfg.PubNubChannel)
+				case pubnub.PNTimeoutCategory:
+					fmt.Println("Timeout — re-subscribing")
+					reconnect(pn, cfg.PubNubChannel)
 				}
 
 			case message := <-listener.Message:
@@ -68,6 +86,18 @@ func main() {
 	pn.Subscribe().
 		Channels([]string{cfg.PubNubChannel}).
 		Execute()
+
+	// Periodic re-subscribe as a safety net. Even if the connection appears
+	// healthy, long-running PubNub subscriptions can silently stop receiving
+	// messages. Re-subscribing every 3 hours forces a fresh connection.
+	go func() {
+		ticker := time.NewTicker(3 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			fmt.Println("Periodic re-subscribe (3h safety net)")
+			reconnect(pn, cfg.PubNubChannel)
+		}
+	}()
 
 	// Wait for termination signal.
 	c := make(chan os.Signal, 1)
